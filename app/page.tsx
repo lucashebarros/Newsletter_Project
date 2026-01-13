@@ -1,5 +1,7 @@
 import { supabase } from '@/lib/supabase';
 
+export const runtime = 'edge';
+
 // Isso diz ao Next.js para atualizar essa página a cada 60 segundos (ISR)
 export const dynamic = 'force-dynamic';
 
