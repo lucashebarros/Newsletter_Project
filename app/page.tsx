@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-
+import NewsletterForm from '@/components/NewsletterForm';
 
 export default async function Home() {
   // Busca os posts no Supabase
@@ -11,6 +11,12 @@ export default async function Home() {
   return (
     <main className="max-w-4xl mx-auto p-10">
       <h1 className="text-4xl font-bold mb-8 text-center">Meu Hub de Conteúdo</h1>
+
+      {/* AREA DE NEWSLETTER */}
+      <div className="grid md:grid-cols-2 gap-6 mb-12">
+        <NewsletterForm category="CYBER" />
+        <NewsletterForm category="GAMES" />
+      </div>
 
       <div className="grid gap-6">
         {posts?.map((post) => (
