@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase';
 
 // Isso diz ao Next.js para atualizar essa página a cada 60 segundos (ISR)
-export const revalidate = 'force-dynamic';
+export const dynamic = 'force-dynamic';
 
 export default async function Home() {
   // Busca os posts no Supabase
