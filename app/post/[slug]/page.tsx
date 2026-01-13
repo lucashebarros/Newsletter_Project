@@ -2,6 +2,8 @@ import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+export const runtime = 'edge';
+
 export default async function Post({ params }: { params: Promise<{ slug: string }> }) {
   // No Next.js 15, precisamos aguardar os parametros da URL
   const { slug } = await params;
