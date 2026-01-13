@@ -1,9 +1,11 @@
 import feedparser
-import google.generativeai as genai # Biblioteca Antiga
+import google.generativeai as genai
 import html2text
 from datetime import datetime, timedelta
 import os
 import time
+import requests # BIBLIOTECA PARA FALAR COM O BREVO
+import json
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from slugify import slugify
@@ -12,18 +14,21 @@ from slugify import slugify
 load_dotenv()
 
 # --- CONFIGURAÇÃO SUPABASE ---
-# COLOQUE SUAS CHAVES AQUI
+
 SUPABASE_URL = "https://kwwipkcwxhlvrzlfkwyz.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt3d2lwa2N3eGhsdnJ6bGZrd3l6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODIzOTMyMCwiZXhwIjoyMDgzODE1MzIwfQ.PHYmOgrFhpmNDy-lXhmxKsX4fbJL270WHqegIm-8MHE"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# --- CONFIGURAÇÃO GEMINI (BIBLIOTECA ANTIGA) ---
+# --- CONFIGURAÇÃO GEMINI ---
 API_KEY = os.getenv("GEMINI_API_KEY")
 genai.configure(api_key=API_KEY)
-
-# CORREÇÃO IMPORTANTE: Não existe gemini-2.5-flash. O correto é 1.5-flash.
 model = genai.GenerativeModel('gemini-2.5-flash') 
+
+# --- CONFIGURAÇÃO BREVO ---
+BREVO_API_KEY = os.getenv("BREVO_API_KEY") # Vamos precisar adicionar isso no .env
+# ID da lista de Cybersegurança (pegue no painel do Brevo)
+BREVO_LIST_ID = 4 
 
 # --- FEEDS ---
 FEEDS = [
@@ -67,7 +72,6 @@ def ai_summarize(title, content):
     **Por que importa:** Explique o impacto para um gestor de TI ou empresa.
     **O veredito:** Uma frase final com humor ácido e ironia.
     """
-    # Tentativa com retry simples para a biblioteca antiga
     for tentativa in range(3):
         try:
             response = model.generate_content(prompt)
@@ -76,7 +80,7 @@ def ai_summarize(title, content):
             erro_str = str(e).lower()
             if "429" in erro_str or "quota" in erro_str or "resource" in erro_str:
                 tempo = (tentativa + 1) * 60
-                print(f"      ⚠️  Cota excedida (Erro 429). Esperando {tempo}s...")
+                print(f"      ⚠️  Cota excedida. Esperando {tempo}s...")
                 time.sleep(tempo)
                 continue
             else:
@@ -91,19 +95,80 @@ def post_exists(slug):
     except:
         return False
 
+# --- NOVA FUNÇÃO: ENVIAR EMAIL ---
+def send_campaign(noticias):
+    if not noticias:
+        return
+
+    print(f"\n📧 Preparando envio de e-mail com {len(noticias)} novidades...")
+
+    # 1. Montar o HTML do E-mail
+    hoje = datetime.now().strftime('%d/%m/%Y')
+    html_content = f"<h1>🛡️ CyberDrop - Edição de {hoje}</h1><hr>"
+    
+    for news in noticias:
+        # Converte markdown básico para HTML simples para o e-mail
+        resumo_html = news['content'].replace('\n', '<br>').replace('**', '<b>')
+        
+        html_content += f"""
+        <div style="margin-bottom: 30px; border-bottom: 1px solid #ccc; padding-bottom: 20px;">
+            <h2 style="color: #2563eb;">{news['title']}</h2>
+            <p>{resumo_html}</p>
+            <a href="https://SEU-SITE-PAGES.dev/post/{news['slug']}" style="background: #000; color: #fff; padding: 10px 15px; text-decoration: none; border-radius: 5px;">Ler no Site</a>
+        </div>
+        """
+    
+    html_content += "<br><p style='font-size: 12px; color: #666;'>Você recebeu isso porque se inscreveu no CyberDrop Hub.</p>"
+
+    # 2. Criar a Campanha no Brevo via API
+    url = "https://api.brevo.com/v3/emailCampaigns"
+    
+    payload = {
+        "name": f"CyberDrop News - {hoje}",
+        "subject": f"🔥 {len(noticias)} Alertas de Cybersegurança para hoje",
+        "sender": {"name": "CyberDrop", "email": "SEU_EMAIL_CADASTRADO_NO_BREVO@GMAIL.COM"}, # <--- TROQUE AQUI
+        "type": "classic",
+        "htmlContent": html_content,
+        "recipients": {"listIds": [BREVO_LIST_ID]}, # Manda para a lista Cyber
+        "scheduledAt": datetime.now().strftime('%Y-%m-%dT%H:%M:%S.000+00:00') # Manda Agora (aproximado)
+    }
+    
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "api-key": BREVO_API_KEY
+    }
+
+    try:
+        # Passo A: Criar Campanha
+        response = requests.post(url, json=payload, headers=headers)
+        
+        if response.status_code == 201:
+            campaign_id = response.json().get('id')
+            print(f"      ✅ Campanha criada! ID: {campaign_id}")
+            
+            # Passo B: Enviar Campanha Imediatamente
+            send_url = f"https://api.brevo.com/v3/emailCampaigns/{campaign_id}/sendNow"
+            requests.post(send_url, headers=headers)
+            print("      🚀 E-mail enviado para a lista!")
+        else:
+            print(f"      ❌ Erro ao criar campanha: {response.text}")
+
+    except Exception as e:
+        print(f"      ❌ Erro na conexão com Brevo: {e}")
+
 # --- MAIN ---
 
 def main():
-    print(f"🕵️  Iniciando varredura (Versão Legacy + Supabase)...\n")
+    print(f"🕵️  Iniciando varredura e disparo...\n")
     
-    count_novos = 0
+    noticias_para_email = [] # Lista para juntar as novidades
 
     for url in FEEDS:
         print(f"📡 Lendo feed: {url}...")
         try:
             feed = feedparser.parse(url)
         except:
-            print(f"Erro ao ler {url}, pulando.")
             continue
         
         for entry in feed.entries:
@@ -114,7 +179,6 @@ def main():
             if not any(k.lower() in text_content.lower() for k in KEYWORDS):
                 continue
 
-            # Gera Slug
             slug_base = slugify(entry.title)
             slug_final = f"{slug_base}-{datetime.now().strftime('%Y-%m-%d')}"
 
@@ -123,38 +187,41 @@ def main():
                 continue
 
             print(f"   🔥 [NOVA] Processando: {entry.title[:40]}...")
-            
             clean_text = clean_html(entry.get('description', ''))
-            
-            # Gera resumo
             resumo_ia = ai_summarize(entry.title, clean_text)
             
             if not resumo_ia: 
                 time.sleep(5)
                 continue
 
-            # Salva no Supabase
+            data_insert = {
+                "title": entry.title,
+                "slug": slug_final,
+                "content": resumo_ia,
+                "category": "CYBER",
+                "image_url": None
+            }
+            
+            # Salva no Banco
             try:
-                data_insert = {
-                    "title": entry.title,
-                    "slug": slug_final,
-                    "content": resumo_ia,
-                    "category": "CYBER",
-                    "image_url": None
-                }
-                
                 supabase.table("posts").insert(data_insert).execute()
-                print("      ✅ Salvo no Banco de Dados!")
-                count_novos += 1
+                print("      ✅ Salvo no Banco!")
+                
+                # ADICIONA NA LISTA DE EMAIL
+                noticias_para_email.append(data_insert)
                 
             except Exception as e:
-                print(f"      ❌ Erro ao salvar no banco: {e}")
+                print(f"      ❌ Erro ao salvar: {e}")
 
-            # Pausa de segurança
-            print("      ⏳ Pausa de 20s...")
             time.sleep(20)
 
-    print(f"\n🏁 Fim. {count_novos} notícias enviadas para o site.")
+    # NO FINAL DE TUDO: Se tiver notícias novas, manda o e-mail
+    if len(noticias_para_email) > 0:
+        send_campaign(noticias_para_email)
+    else:
+        print("\n💤 Nenhuma notícia nova para enviar por e-mail hoje.")
+
+    print(f"\n🏁 Fim.")
 
 if __name__ == "__main__":
     main()
