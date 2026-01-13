@@ -1,5 +1,9 @@
 import { supabase } from '@/lib/supabase';
 import NewsletterForm from '@/components/NewsletterForm';
+import Link from 'next/link';
+
+export const runtime = 'edge'; // OBRIGATÓRIO: Roda no servidor Edge (rápido)
+export const dynamic = 'force-dynamic'; // OBRIGATÓRIO: Atualiza a cada visita
 
 export default async function Home() {
   // Busca os posts no Supabase
