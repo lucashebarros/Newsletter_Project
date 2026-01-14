@@ -114,7 +114,7 @@ def send_campaign(noticias):
         <div style="margin-bottom: 30px; border-bottom: 1px solid #ccc; padding-bottom: 20px;">
             <h2 style="color: #2563eb;">{news['title']}</h2>
             <p>{resumo_html}</p>
-            <a href="https://SEU-SITE-PAGES.dev/post/{news['slug']}" style="background: #000; color: #fff; padding: 10px 15px; text-decoration: none; border-radius: 5px;">Ler no Site</a>
+            <a href="https://newsletter-project.pages.dev/post/{news['slug']}" style="background: #000; color: #fff; padding: 10px 15px; text-decoration: none; border-radius: 5px;">Ler no Site</a>
         </div>
         """
     
