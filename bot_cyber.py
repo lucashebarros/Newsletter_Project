@@ -126,7 +126,7 @@ def send_campaign(noticias):
     payload = {
         "name": f"CyberDrop News - {hoje}",
         "subject": f"🔥 {len(noticias)} Alertas de Cybersegurança para hoje",
-        "sender": {"name": "CyberDrop", "email": "SEU_EMAIL_CADASTRADO_NO_BREVO@GMAIL.COM"}, # <--- TROQUE AQUI
+        "sender": {"name": "CyberDrop", "email": "barroslucash@gmail.com"},
         "type": "classic",
         "htmlContent": html_content,
         "recipients": {"listIds": [BREVO_LIST_ID]}, # Manda para a lista Cyber
